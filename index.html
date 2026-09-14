@@ -35,7 +35,14 @@
     cursor: pointer;
     margin-top: 0.6rem;
   }
-  #out { word-break: break-all; color: #9ad; font-size: 0.85rem; }
+  #out {
+    height: 6rem;
+    color: #9ad;
+    font-size: 0.78rem;
+    word-break: break-all;
+    margin-top: 0.5rem;
+  }
+  button + button { margin-left: 0.4rem; }
   .dim { color: #8a8a99; }
 </style>
 </head>
@@ -52,11 +59,22 @@
   </p>
   <p><a id="demo" href="#">open the demo page</a></p>
 
-  <h2>pack your own</h2>
-  <p class="dim">Paste any html below and get a link that contains all of it.</p>
-  <textarea id="src">&lt;h1&gt;hello&lt;/h1&gt;&lt;p&gt;this whole page is in the link.&lt;/p&gt;</textarea>
-  <p><button id="go">make the link</button></p>
-  <p id="out"></p>
+  <h2>write your own</h2>
+  <p class="dim">
+    Type any html you like in here. Hit the button and you get back a link with
+    your entire page stuffed inside it. Copy it, paste it in a fresh tab, and
+    watch your thing come alive out of nothing but the address bar.
+  </p>
+  <textarea id="src" spellcheck="false">&lt;!doctype html&gt;
+&lt;style&gt;body{background:#101018;color:#fff;font-family:system-ui;display:grid;place-items:center;height:100vh;margin:0}&lt;/style&gt;
+&lt;h1&gt;i made this and it has no home&lt;/h1&gt;</textarea>
+  <p>
+    <button id="go">make the link</button>
+    <button id="copy" hidden>copy</button>
+    <button id="open" hidden>open it</button>
+  </p>
+  <p id="stat" class="dim"></p>
+  <textarea id="out" readonly hidden></textarea>
 
   <p class="dim">
     Nothing you type is ever sent anywhere. Browsers do not put the fragment in
@@ -113,14 +131,43 @@ document.getElementById("l").textContent=location.href.length;<\/script>`;
     document.getElementById("demo").href = "#" + p;
   });
 
+  const out = document.getElementById("out");
+  const stat = document.getElementById("stat");
+  const copyBtn = document.getElementById("copy");
+  const openBtn = document.getElementById("open");
+  let made = "";
+
   document.getElementById("go").onclick = async () => {
     const html = document.getElementById("src").value;
+    if (!html.trim()) { stat.textContent = "write something first"; return; }
+
     const p = await pack(html);
-    const url = location.origin + location.pathname + "#" + p;
-    document.getElementById("out").innerHTML =
-      '<a href="' + url + '">' + url + "</a><br><span class=dim>" +
-      url.length + " characters, from " + html.length + " bytes of html</span>";
+    made = location.origin + location.pathname + "#" + p;
+
+    out.value = made;
+    out.hidden = false;
+    copyBtn.hidden = false;
+    openBtn.hidden = false;
+    copyBtn.textContent = "copy";
+
+    const ratio = Math.round((made.length / html.length) * 100);
+    stat.textContent =
+      html.length + " bytes of html became a " + made.length +
+      " character link (" + ratio + "% of the original). select it, copy it, paste it anywhere.";
   };
+
+  copyBtn.onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(made);
+      copyBtn.textContent = "copied";
+    } catch (e) {
+      out.select();
+      copyBtn.textContent = "press ctrl+c";
+    }
+    setTimeout(() => { copyBtn.textContent = "copy"; }, 1500);
+  };
+
+  openBtn.onclick = () => window.open(made, "_blank");
 }
 </script>
 </body>
