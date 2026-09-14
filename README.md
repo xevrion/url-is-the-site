@@ -6,18 +6,54 @@ builds the whole page out of the address bar.
 
 ## How it works
 
-Browsers understand `data:` URLs. Instead of pointing at a file somewhere, a data
-URL just carries the content itself:
+A normal URL is an address. `https://site.com/page.html` means "go ask that
+server for that file". But there is another scheme, `data:`, where the URL is not
+an address at all. It carries the content inline:
 
 ```
 data:text/html;base64,PCFkb2N0eXBlIGh0bWw+...
 ```
 
-Paste that into the address bar and the browser renders it as a page. So if you
-take an html file, base64 it, and glue that prefix on the front, you get a link
-that IS the website.
+The browser reads the `text/html` bit, decodes the base64 after the comma, and
+renders whatever comes out as a page. No network request happens. There is no
+server, no file on disk, nothing being fetched. So if you take an entire html
+file, base64 it, and glue that prefix on the front, you get a link that IS the
+website. That is the whole idea, and it is genuinely about three lines of code:
 
-`pack.py` does exactly that, in three flavours.
+```python
+blob = base64.b64encode(html.encode()).decode()
+url = "data:text/html;base64," + blob
+```
+
+Everything else in this repo is just making that link shorter.
+
+### making it smaller
+
+Base64 turns every 3 bytes into 4 characters, a flat 33% tax. So `--squish`
+gzips the page first, base64s *that*, and wraps it in a tiny loader page which is
+itself a data URL. The loader fetches the compressed payload, pipes it through
+`DecompressionStream("gzip")` (browsers ship a gunzip for free, you do not need
+to write one), then replaces itself with the real page:
+
+```js
+fetch("data:application/octet-stream;base64," + payload)
+  .then(r => r.blob())
+  .then(b => new Response(b.stream().pipeThrough(new DecompressionStream("gzip"))).text())
+  .then(html => { document.open(); document.write(html); document.close(); });
+```
+
+The `document.open()` before `document.write()` is what actually swaps the page
+out. Setting `innerHTML` would not work, script tags injected that way never run.
+
+### the fragment trick
+
+Everything after `#` in a URL is the fragment, and it is purely client side. The
+browser never puts it in the HTTP request. That means you can host the 20 line
+`index.html` on GitHub Pages, but the actual page content still never touches any
+server. The server literally cannot know what page it served you. It only ever
+exists in the link you share.
+
+Live loader: <https://xevrion.github.io/url-is-the-site/>
 
 ## Usage
 
@@ -27,15 +63,10 @@ python3 pack.py site.html --squish   # gzip it first, loader unpacks in the brow
 python3 pack.py site.html --hash     # payload for index.html, rides after the #
 ```
 
-Copy the output, paste it in the address bar, hit enter.
+Copy the output, paste it in the address bar, hit enter. For `--hash`, stick the
+output on the end of the loader URL instead.
 
-The `--squish` mode wraps your page in a tiny loader that uses `DecompressionStream`
-to unzip the payload client side. Barely helps on small files (the base64 tax eats
-the gain) but on anything real it cuts the link roughly in half.
-
-The `--hash` mode is my favourite. Everything after `#` in a URL never leaves your
-machine, browsers do not send it to the server. So you can host the 20 line
-`index.html` anywhere and the actual page still only exists in the link you share.
+`site.html` is a small demo page to try it on, swap in your own.
 
 ## Limits
 
