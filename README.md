@@ -53,6 +53,25 @@ browser never puts it in the HTTP request. That means you can host the 20 line
 server. The server literally cannot know what page it served you. It only ever
 exists in the link you share.
 
+### do you need the hosted page?
+
+No. The plain `data:` link is completely standalone. It carries the page and
+everything needed to display it, so it works offline, on a plane, forever, with
+nothing on the other end. There is no server to go down.
+
+The hosted loader is only for the `#` mode, and it exists purely as a size
+tradeoff. Gzipping cuts the link roughly in half, but something has to run the
+gunzip, and that something is the loader page. So you trade being standalone for
+a shorter link.
+
+`index.html` itself is also standalone. Save it, open it off your disk with no
+internet, and it still packs links for you.
+
+| | standalone | needs a host | link size |
+|---|---|---|---|
+| `data:` | yes | no | bigger |
+| `#` | no | yes | about half |
+
 Live loader: <https://xevrion.github.io/url-is-the-site/>
 
 ## Usage

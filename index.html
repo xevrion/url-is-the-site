@@ -50,12 +50,12 @@
 <main id="app">
   <h1>url-is-the-site</h1>
   <p>
-    This page is a loader. It takes a whole website packed into the part of the
-    URL after the <code>#</code> and unpacks it right here in your browser.
+    Write a page, get a link with the whole thing inside it. Send the link to
+    anyone and their browser rebuilds the page out of the address bar alone.
   </p>
-  <p>
-    You landed here with nothing after the <code>#</code>, so there is nothing to
-    unpack yet. Try the demo:
+  <p class="dim">
+    You can also just save this file and open it off your disk. It does not need
+    a server, and neither do the links it makes.
   </p>
   <p><a id="demo" href="#">open the demo page</a></p>
 
@@ -68,6 +68,10 @@
   <textarea id="src" spellcheck="false">&lt;!doctype html&gt;
 &lt;style&gt;body{background:#101018;color:#fff;font-family:system-ui;display:grid;place-items:center;height:100vh;margin:0}&lt;/style&gt;
 &lt;h1&gt;i made this and it has no home&lt;/h1&gt;</textarea>
+  <p>
+    <label><input type="radio" name="mode" value="data" checked> standalone link, works with no internet at all</label><br>
+    <label><input type="radio" name="mode" value="hash"> link through this page, much shorter</label>
+  </p>
   <p>
     <button id="go">make the link</button>
     <button id="copy" hidden>copy</button>
@@ -85,7 +89,18 @@
 
 <script>
 
-// pack: gzip -> base64 -> percent encode, ready to paste after the #
+// plain base64, no url escaping needed for a data url body
+function b64(str) {
+  return btoa(unescape(encodeURIComponent(str)));
+}
+
+// a standalone data: url. carries the page AND the code to show it.
+// no server, no host, works on a plane.
+function dataUrl(html) {
+  return "data:text/html;charset=utf-8;base64," + b64(html);
+}
+
+// gzip -> base64 -> percent encode, ready to sit after a #
 async function pack(html) {
   const gz = new Blob([html]).stream().pipeThrough(new CompressionStream("gzip"));
   const buf = new Uint8Array(await new Response(gz).arrayBuffer());
@@ -141,19 +156,28 @@ document.getElementById("l").textContent=location.href.length;<\/script>`;
     const html = document.getElementById("src").value;
     if (!html.trim()) { stat.textContent = "write something first"; return; }
 
-    const p = await pack(html);
-    made = location.origin + location.pathname + "#" + p;
+    const mode = document.querySelector('input[name=mode]:checked').value;
+
+    if (mode === "data") {
+      made = dataUrl(html);
+      stat.textContent =
+        html.length + " bytes of html became a " + made.length +
+        " character link. this one is completely on its own, no internet needed, " +
+        "nothing on the other end. paste it anywhere and it just is the page.";
+    } else {
+      const p = await pack(html);
+      made = location.origin + location.pathname + "#" + p;
+      stat.textContent =
+        html.length + " bytes of html became a " + made.length +
+        " character link. shorter because it is gzipped, but it borrows this page " +
+        "to do the unpacking, so it needs to be online.";
+    }
 
     out.value = made;
     out.hidden = false;
     copyBtn.hidden = false;
     openBtn.hidden = false;
     copyBtn.textContent = "copy";
-
-    const ratio = Math.round((made.length / html.length) * 100);
-    stat.textContent =
-      html.length + " bytes of html became a " + made.length +
-      " character link (" + ratio + "% of the original). select it, copy it, paste it anywhere.";
   };
 
   copyBtn.onclick = async () => {
@@ -167,7 +191,18 @@ document.getElementById("l").textContent=location.href.length;<\/script>`;
     setTimeout(() => { copyBtn.textContent = "copy"; }, 1500);
   };
 
-  openBtn.onclick = () => window.open(made, "_blank");
+  openBtn.onclick = () => {
+    if (made.startsWith("data:")) {
+      // browsers refuse to open a data: url from a script, on purpose.
+      // it has to come from you, so nudge the person to paste it themselves.
+      out.select();
+      stat.textContent =
+        "browsers block scripts from opening data: links, which is fair enough. " +
+        "copy it and paste it into a new tab yourself, that part has to be you.";
+      return;
+    }
+    window.open(made, "_blank");
+  };
 }
 </script>
 </body>
