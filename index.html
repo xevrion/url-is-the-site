@@ -2,20 +2,125 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>loader</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>url-is-the-site</title>
+<style>
+  body {
+    background: #14141a;
+    color: #e8e8ef;
+    font-family: ui-monospace, monospace;
+    line-height: 1.6;
+    margin: 0;
+    padding: 2rem 1rem;
+  }
+  main { max-width: 40rem; margin: 0 auto; }
+  h1 { margin-top: 0; }
+  a { color: #9ad; }
+  textarea {
+    width: 100%;
+    height: 9rem;
+    background: #1d1d26;
+    color: #e8e8ef;
+    border: 1px solid #33333f;
+    font: inherit;
+    padding: 0.6rem;
+    box-sizing: border-box;
+  }
+  button {
+    font: inherit;
+    background: #e8e8ef;
+    color: #14141a;
+    border: 0;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    margin-top: 0.6rem;
+  }
+  #out { word-break: break-all; color: #9ad; font-size: 0.85rem; }
+  .dim { color: #8a8a99; }
+</style>
 </head>
 <body>
-<p id="msg">nothing after the # in this url, so there is nothing to show.</p>
+<main id="app">
+  <h1>url-is-the-site</h1>
+  <p>
+    This page is a loader. It takes a whole website packed into the part of the
+    URL after the <code>#</code> and unpacks it right here in your browser.
+  </p>
+  <p>
+    You landed here with nothing after the <code>#</code>, so there is nothing to
+    unpack yet. Try the demo:
+  </p>
+  <p><a id="demo" href="#">open the demo page</a></p>
+
+  <h2>pack your own</h2>
+  <p class="dim">Paste any html below and get a link that contains all of it.</p>
+  <textarea id="src">&lt;h1&gt;hello&lt;/h1&gt;&lt;p&gt;this whole page is in the link.&lt;/p&gt;</textarea>
+  <p><button id="go">make the link</button></p>
+  <p id="out"></p>
+
+  <p class="dim">
+    Nothing you type is ever sent anywhere. Browsers do not put the fragment in
+    the HTTP request, so the server behind this page cannot see it.
+    <a href="https://github.com/xevrion/url-is-the-site">source on github</a>
+  </p>
+</main>
+
 <script>
-// same trick, but the payload rides in the fragment instead of the whole url.
-// browsers never send the part after # to a server, so the page still only
-// exists inside your link.
-const raw = location.hash.slice(1);
-if (raw) {
-  const bytes = Uint8Array.from(atob(decodeURIComponent(raw)), c => c.charCodeAt(0));
-  new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip")))
-    .text()
-    .then(html => { document.open(); document.write(html); document.close(); });
+
+// pack: gzip -> base64 -> percent encode, ready to paste after the #
+async function pack(html) {
+  const gz = new Blob([html]).stream().pipeThrough(new CompressionStream("gzip"));
+  const buf = new Uint8Array(await new Response(gz).arrayBuffer());
+  let bin = "";
+  for (const b of buf) bin += String.fromCharCode(b);
+  return encodeURIComponent(btoa(bin));
+}
+
+async function unpack(frag) {
+  const bin = atob(decodeURIComponent(frag));
+  const bytes = Uint8Array.from(bin, c => c.charCodeAt(0));
+  const gz = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
+  return new Response(gz).text();
+}
+
+const frag = location.hash.slice(1);
+
+if (frag) {
+  unpack(frag).then(html => {
+    document.open();
+    document.write(html);
+    document.close();
+  }).catch(e => {
+    document.getElementById("app").innerHTML =
+      "<h1>could not unpack that</h1><p>The link is probably truncated. Chat apps and email clients love chopping long urls in half.</p>";
+  });
+} else {
+  const demoPage = `<!doctype html><meta charset=utf-8>
+<style>body{background:#14141a;color:#e8e8ef;font-family:ui-monospace,monospace;display:grid;place-items:center;min-height:100vh;margin:0}
+main{max-width:34rem;padding:2rem;line-height:1.6}button{font:inherit;background:#e8e8ef;color:#14141a;border:0;padding:.5rem 1rem;cursor:pointer}
+code{color:#9ad;word-break:break-all}</style>
+<main><h1>hi from inside a link</h1>
+<p>There is no server behind this page. Everything you are reading was squeezed
+into the address bar and unpacked by your own browser a moment ago.</p>
+<p>The counter proves the javascript survived the trip too.</p>
+<p><button id=t>tapped 0 times</button></p>
+<p>length of the url that made me: <code id=l>?</code> characters</p></main>
+<script>let n=0;const b=document.getElementById("t");
+b.onclick=()=>{n++;b.textContent="tapped "+n+" times"};
+document.getElementById("l").textContent=location.href.length;<\/script>`;
+
+  pack(demoPage).then(p => {
+    document.getElementById("demo").href = "#" + p;
+  });
+
+  document.getElementById("go").onclick = async () => {
+    const html = document.getElementById("src").value;
+    const p = await pack(html);
+    const url = location.origin + location.pathname + "#" + p;
+    document.getElementById("out").innerHTML =
+      '<a href="' + url + '">' + url + "</a><br><span class=dim>" +
+      url.length + " characters, from " + html.length + " bytes of html</span>";
+  };
 }
 </script>
 </body>
